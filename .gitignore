@@ -1,0 +1,52 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+override.tf
+override.tf.json
+
+# Environment files
+.env
+*.env
+!.env.example
+
+# Secrets
+secrets/
+*.pem
+*.key
+*.crt
+id_rsa*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+
+# Docker
+*.log
+
+# Kubernetes
+kubeconfig*
+!kubeconfig.example
+
+# Misc
+.tmp/
+temp/
