@@ -1,0 +1,80 @@
+# infrastructure/kubernetes/base/secure-pod-example.yaml
+# Example of a secure pod that passes "restricted" Pod Security Standard
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-nginx
+  namespace: helix-app
+  labels:
+    app: secure-nginx
+spec:
+  serviceAccountName: helix-app-sa
+  
+  # Security Context at pod level
+  securityContext:
+    runAsNonRoot: true        # Must not run as root
+    runAsUser: 1000           # Run as specific non-root user
+    fsGroup: 1000             # File system group
+    seccompProfile:
+      type: RuntimeDefault    # Use default seccomp profile
+  
+  containers:
+    - name: nginx
+      image: nginx:alpine
+      
+      # Security Context at container level
+      securityContext:
+        allowPrivilegeEscalation: false  # Cannot gain more privileges
+        runAsNonRoot: true
+        runAsUser: 1000
+        capabilities:
+          drop:
+            - ALL          # Drop all capabilities
+          # add: []      # Don't add any back
+        readOnlyRootFilesystem: true  # Root filesystem is read-only
+      
+      # Resource limits (required for restricted)
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "100m"
+        limits:
+          memory: "128Mi"
+          cpu: "200m"
+      
+      ports:
+        - containerPort: 8080
+          name: http
+      
+      # Volume mounts (only allowed types)
+      volumeMounts:
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+  
+  # Only allowed volume types
+  volumes:
+    - name: cache
+      emptyDir: {}
+    - name: run
+      emptyDir: {}
+
+---
+# Example of what NOT to do (this will be REJECTED)
+# Uncomment to test
+#
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: insecure-pod
+#   namespace: helix-app
+# spec:
+#   containers:
+#     - name: bad-container
+#       image: nginx
+#       securityContext:
+#         privileged: true          # ❌ REJECTED: Privileged not allowed
+#         runAsUser: 0              # ❌ REJECTED: Running as root
+#   hostNetwork: true               # ❌ REJECTED: Host network not allowed

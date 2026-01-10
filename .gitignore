@@ -50,3 +50,23 @@ kubeconfig*
 # Misc
 .tmp/
 temp/
+
+# Secrets (plaintext - NEVER commit!)
+infrastructure/kubernetes/secrets/*.yaml
+infrastructure/kubernetes/secrets/templates/*.yaml
+!infrastructure/kubernetes/secrets/templates/*.yaml.template
+!infrastructure/kubernetes/secrets/sealed/*.yaml
+
+# Temporary files
+*.tmp
+*.temp
+
+# Secrets (plaintext - NEVER commit!)
+infrastructure/kubernetes/secrets/*.yaml
+infrastructure/kubernetes/secrets/templates/*.yaml
+!infrastructure/kubernetes/secrets/templates/*.yaml.template
+!infrastructure/kubernetes/secrets/sealed/*.yaml
+
+# Temporary files
+*.tmp
+*.temp

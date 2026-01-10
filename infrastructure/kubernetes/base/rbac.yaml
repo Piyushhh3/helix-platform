@@ -1,0 +1,283 @@
+# infrastructure/kubernetes/base/rbac.yaml
+# RBAC Configuration - Role-Based Access Control
+
+---
+# Namespace for applications
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: helix-app
+  labels:
+    name: helix-app
+    environment: dev
+
+---
+# Namespace for monitoring
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    purpose: observability
+
+---
+# Namespace for AI operations
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aiops
+  labels:
+    name: aiops
+    purpose: self-healing
+
+---
+# ServiceAccount for application pods
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: helix-app-sa
+  namespace: helix-app
+  annotations:
+    description: "Service account for Helix application pods"
+
+---
+# ServiceAccount for AI healing agent
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-healing-agent
+  namespace: aiops
+  annotations:
+    description: "Service account for AI healing agent with cluster-wide read + helix-app write"
+
+---
+# ServiceAccount for monitoring
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitoring-sa
+  namespace: monitoring
+  annotations:
+    description: "Service account for monitoring stack (Prometheus, Grafana)"
+
+---
+# Role: Application Developer (namespace-scoped)
+# Can view and manage application resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: helix-app
+rules:
+  # Pods
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  
+  # Deployments, ReplicaSets
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  
+  # Services
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  
+  # ConfigMaps (read-only)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  
+  # Secrets (no access - use sealed secrets)
+  # Intentionally NOT included
+
+---
+# Role: Application Manager (namespace-scoped)
+# Can create, update, delete application resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: app-manager
+  namespace: helix-app
+rules:
+  # Full access to application resources
+  - apiGroups: ["", "apps"]
+    resources: 
+      - pods
+      - deployments
+      - replicasets
+      - services
+      - configmaps
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  
+  # Read-only access to secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+
+---
+# ClusterRole: Cluster Viewer (read-only across cluster)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-viewer
+rules:
+  # View nodes
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  
+  # View namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  
+  # View pods across all namespaces
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+---
+# ClusterRole: AI Healing Agent
+# Can read cluster state and remediate helix-app namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ai-healing-agent
+rules:
+  # Read cluster-wide resources
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces", "pods", "services", "events"]
+    verbs: ["get", "list", "watch"]
+  
+  # Read deployments/replicasets
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  
+  # Read metrics
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+
+---
+# Role: AI Healing Agent - helix-app namespace
+# Can perform remediation actions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-healing-agent-remediate
+  namespace: helix-app
+rules:
+  # Can restart pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  
+  # Can scale deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "patch", "update"]
+  
+  # Can rollback deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments/rollback"]
+    verbs: ["create"]
+  
+  # Can create events (for audit trail)
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+---
+# ClusterRoleBinding: AI Healing Agent (cluster-wide read)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ai-healing-agent-viewer
+subjects:
+  - kind: ServiceAccount
+    name: ai-healing-agent
+    namespace: aiops
+roleRef:
+  kind: ClusterRole
+  name: ai-healing-agent
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RoleBinding: AI Healing Agent - Remediation (helix-app)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-healing-agent-remediate
+  namespace: helix-app
+subjects:
+  - kind: ServiceAccount
+    name: ai-healing-agent
+    namespace: aiops
+roleRef:
+  kind: Role
+  name: ai-healing-agent-remediate
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRole: Monitoring (Prometheus)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  # Read all resources for metrics
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+  
+  # Read metrics
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs: ["get"]
+  
+  # Scrape metrics from nodes
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+
+---
+# ClusterRoleBinding: Prometheus
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: monitoring-sa
+    namespace: monitoring
+roleRef:
+  kind: ClusterRole
+  name: prometheus
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Example RoleBinding for a developer user (commented out)
+# Uncomment and modify for actual users
+#
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   name: developer-john
+#   namespace: helix-app
+# subjects:
+#   - kind: User
+#     name: john@example.com
+#     apiGroup: rbac.authorization.k8s.io
+# roleRef:
+#   kind: Role
+#   name: developer
+#   apiGroup: rbac.authorization.k8s.io
