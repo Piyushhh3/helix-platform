@@ -1,0 +1,113 @@
+name: CI - All Services
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+jobs:
+  build-all-services:
+    name: Build All Services
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: user-service
+            repository: helix-user-service
+          - name: product-service
+            repository: helix-product-service
+          - name: order-service
+            repository: helix-order-service
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 🔑 Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 🏷️ Generate image tags
+        id: meta
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          
+          # Get version from tag or manual input
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ "${{ github.event.inputs.version }}" != "" ]]; then
+            VERSION=${{ github.event.inputs.version }}
+          else
+            VERSION="latest"
+          fi
+          
+          TAGS="${{ env.ECR_REGISTRY }}/${{ matrix.service.repository }}:latest"
+          TAGS="${TAGS},${{ env.ECR_REGISTRY }}/${{ matrix.service.repository }}:sha-${SHORT_SHA}"
+          TAGS="${TAGS},${{ env.ECR_REGISTRY }}/${{ matrix.service.repository }}:${TIMESTAMP}"
+          TAGS="${TAGS},${{ env.ECR_REGISTRY }}/${{ matrix.service.repository }}:${VERSION}"
+          
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: 🏗️ Build Docker image - ${{ matrix.service.name }}
+        working-directory: ./applications
+        run: |
+          docker build \
+            -t ${{ env.ECR_REGISTRY }}/${{ matrix.service.repository }}:latest \
+            -f ${{ matrix.service.name }}/Dockerfile \
+            .
+
+      - name: 🔍 Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ matrix.service.repository }}:latest
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: 📤 Push images to ECR
+        run: |
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.meta.outputs.tags }}"
+          for tag in "${TAG_ARRAY[@]}"; do
+            docker tag ${{ env.ECR_REGISTRY }}/${{ matrix.service.repository }}:latest $tag
+            docker push $tag
+          done
+
+  summary:
+    name: Build Summary
+    needs: build-all-services
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: 📊 Generate Summary
+        run: |
+          echo "## 🚀 All Services Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.ref_name || github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Services Built:" >> $GITHUB_STEP_SUMMARY
+          echo "- helix-user-service" >> $GITHUB_STEP_SUMMARY
+          echo "- helix-product-service" >> $GITHUB_STEP_SUMMARY
+          echo "- helix-order-service" >> $GITHUB_STEP_SUMMARY

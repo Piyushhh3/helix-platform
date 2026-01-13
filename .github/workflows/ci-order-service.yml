@@ -1,0 +1,105 @@
+name: CI - Order Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'applications/order-service/**'
+      - 'applications/common_*.py'
+      - '.github/workflows/ci-order-service.yml'
+  pull_request:
+    paths:
+      - 'applications/order-service/**'
+      - 'applications/common_*.py'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  ECR_REPOSITORY: helix-order-service
+  SERVICE_NAME: order-service
+
+jobs:
+  build-and-push:
+    name: Build and Push Order Service
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 🔑 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 🏷️ Generate image tags
+        id: meta
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          
+          TAGS="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest"
+          TAGS="${TAGS},${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:sha-${SHORT_SHA}"
+          TAGS="${TAGS},${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${TIMESTAMP}"
+          
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            TAGS="${TAGS},${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${VERSION}"
+          fi
+          
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: 🏗️ Build Docker image
+        id: build
+        working-directory: ./applications
+        run: |
+          docker build \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
+            -f ${{ env.SERVICE_NAME }}/Dockerfile \
+            .
+          
+          SIZE=$(docker images ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest --format "{{.Size}}")
+          echo "image_size=${SIZE}" >> $GITHUB_OUTPUT
+
+      - name: 🔍 Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: 📤 Push image to ECR
+        if: github.event_name != 'pull_request'
+        run: |
+          IFS=',' read -ra TAG_ARRAY <<< "${{ steps.meta.outputs.tags }}"
+          for tag in "${TAG_ARRAY[@]}"; do
+            docker tag ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest $tag
+            docker push $tag
+          done
+
+      - name: 📊 Build Summary
+        if: always()
+        run: |
+          echo "## 🎉 Order Service Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** order-service" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Size:** ${{ steps.build.outputs.image_size }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Git SHA:** ${{ steps.meta.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Pushed:** ${{ github.event_name != 'pull_request' && '✅ Yes' || '❌ No (PR)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Image Tags" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
