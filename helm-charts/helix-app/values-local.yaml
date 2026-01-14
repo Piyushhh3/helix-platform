@@ -1,0 +1,123 @@
+# LOCAL MINIKUBE ENVIRONMENT
+# ============================================================================
+
+global:
+  environment: local
+  imageRegistry: "" # Use local Docker images
+  imagePullPolicy: IfNotPresent # Don't pull from ECR
+
+# ============================================================================
+# USER SERVICE - LOCAL
+# ============================================================================
+userService:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: helix-user-service
+    tag: latest
+  
+  autoscaling:
+    enabled: false # Disable for local
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  
+  env:
+    - name: DATABASE_URL
+      value: "postgresql://postgres:postgres@postgres:5432/userdb"
+    - name: JWT_SECRET_KEY
+      value: "local-dev-secret-key-not-for-production"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: LOG_LEVEL
+      value: "DEBUG"
+
+# ============================================================================
+# PRODUCT SERVICE - LOCAL
+# ============================================================================
+productService:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: helix-product-service
+    tag: latest
+  
+  autoscaling:
+    enabled: false
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  
+  env:
+    - name: DATABASE_URL
+      value: "postgresql://postgres:postgres@postgres:5432/productdb"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: LOG_LEVEL
+      value: "DEBUG"
+
+# ============================================================================
+# ORDER SERVICE - LOCAL
+# ============================================================================
+orderService:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: helix-order-service
+    tag: latest
+  
+  autoscaling:
+    enabled: false
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  
+  env:
+    - name: DATABASE_URL
+      value: "postgresql://postgres:postgres@postgres:5432/orderdb"
+    - name: PRODUCT_SERVICE_URL
+      value: "http://product-service:8001"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: LOG_LEVEL
+      value: "DEBUG"
+
+# ============================================================================
+# INGRESS - DISABLED FOR LOCAL
+# ============================================================================
+ingress:
+  enabled: false # Use port-forward instead
+
+# ============================================================================
+# POSTGRES - LOCAL INSTANCE
+# ============================================================================
+postgres:
+  enabled: true # Deploy local PostgreSQL
+  image: postgres:15-alpine
+  service:
+    port: 5432
+  env:
+    - name: POSTGRES_USER
+      value: postgres
+    - name: POSTGRES_PASSWORD
+      value: postgres
+    - name: POSTGRES_MULTIPLE_DATABASES
+      value: "userdb,productdb,orderdb"

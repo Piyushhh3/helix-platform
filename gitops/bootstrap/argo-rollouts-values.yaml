@@ -1,0 +1,23 @@
+# ============================================================================
+# ARGO ROLLOUTS CUSTOM VALUES
+# ============================================================================
+installCRDs: true
+
+dashboard:
+  enabled: true
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+    hosts:
+      - rollouts.helix-platform.io
+
+controller:
+  replicas: 2
+  
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

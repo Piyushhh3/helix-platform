@@ -1,0 +1,49 @@
+{{- if .Values.productService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.productService.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "helix-app.labels" . | nindent 4 }}
+    app: {{ .Values.productService.name }}
+    service: {{ .Values.productService.name }}
+spec:
+  {{- if not .Values.productService.autoscaling.enabled }}
+  replicas: {{ .Values.productService.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Values.productService.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.productService.name }}
+        service: {{ .Values.productService.name }}
+        version: {{ .Values.productService.image.tag | quote }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Values.productService.name }}
+        image: {{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}{{ .Values.productService.image.repository }}:{{ .Values.productService.image.tag }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.productService.service.targetPort }}
+          protocol: TCP
+        env:
+        {{- toYaml .Values.productService.env | nindent 8 }}
+        livenessProbe:
+          {{- toYaml .Values.productService.healthCheck.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.productService.healthCheck.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.productService.resources | nindent 10 }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+{{- end }}

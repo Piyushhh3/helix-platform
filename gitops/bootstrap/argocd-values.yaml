@@ -1,0 +1,64 @@
+# ============================================================================
+# ARGOCD CUSTOM VALUES
+# ============================================================================
+global:
+  domain: argocd.helix-platform.io
+
+server:
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/backend-protocol: HTTPS
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    hosts:
+      - argocd.helix-platform.io
+  
+  config:
+    # Enable anonymous read-only access for demo
+    users.anonymous.enabled: "true"
+    
+  rbacConfig:
+    policy.default: role:readonly
+    
+configs:
+  cm:
+    # Timeout for sync operations
+    timeout.reconciliation: 180s
+    
+    # Repository credentials
+    repositories: |
+      - url: https://github.com/Piyushhh3/helix-platform.git
+        name: helix-platform
+        type: git
+  
+  params:
+    # Server configuration
+    server.insecure: true
+    
+  rbac:
+    # RBAC policies
+    policy.csv: |
+      p, role:readonly, applications, get, */*, allow
+      p, role:readonly, certificates, get, *, allow
+      p, role:readonly, clusters, get, *, allow
+      p, role:readonly, repositories, get, *, allow
+      p, role:readonly, projects, get, *, allow
+      p, role:readonly, accounts, get, *, allow
+      p, role:readonly, gpgkeys, get, *, allow
+      g, role:readonly, role:readonly
+
+repoServer:
+  replicas: 2
+
+controller:
+  replicas: 2
+
+redis:
+  enabled: true
+
+notifications:
+  enabled: true
+  argocdUrl: https://argocd.helix-platform.io

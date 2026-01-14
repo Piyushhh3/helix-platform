@@ -1,0 +1,19 @@
+{{- if .Values.userService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.userService.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "helix-app.labels" . | nindent 4 }}
+    app: {{ .Values.userService.name }}
+spec:
+  type: {{ .Values.userService.service.type }}
+  ports:
+  - port: {{ .Values.userService.service.port }}
+    targetPort: {{ .Values.userService.service.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    app: {{ .Values.userService.name }}
+{{- end }}

@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+  namespace: {{ .Release.Namespace }}
+spec:
+  args:
+    - name: service-name
+  
+  metrics:
+    - name: success-rate
+      interval: 30s
+      successCondition: result >= 0.95
+      failureLimit: 3
+      provider:
+        prometheus:
+          address: http://prometheus-kube-prometheus-prometheus.monitoring:9090
+          query: |
+            sum(rate(
+              http_requests_total{
+                job="{{ "{{args.service-name}}" }}",
+                status!~"5.."
+              }[1m]
+            )) 
+            / 
+            sum(rate(
+              http_requests_total{
+                job="{{ "{{args.service-name}}" }}"
+              }[1m]
+            ))

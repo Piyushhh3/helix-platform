@@ -1,0 +1,62 @@
+{{- if .Values.userService.enabled }}
+{{- if .Values.userService.rollout.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ .Values.userService.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "helix-app.labels" . | nindent 4 }}
+    app: {{ .Values.userService.name }}
+spec:
+  replicas: {{ .Values.userService.replicaCount }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: {{ .Values.userService.name }}
+  
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.userService.name }}
+        version: {{ .Values.userService.image.tag | quote }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Values.userService.name }}
+        image: {{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.userService.service.targetPort }}
+        env:
+        {{- toYaml .Values.userService.env | nindent 8 }}
+        livenessProbe:
+          {{- toYaml .Values.userService.healthCheck.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.userService.healthCheck.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.userService.resources | nindent 10 }}
+  
+  strategy:
+    canary:
+      maxSurge: "25%"
+      maxUnavailable: 0
+      steps:
+        - setWeight: 20
+        - pause: {duration: 30s}
+        - setWeight: 50
+        - pause: {duration: 30s}
+        - setWeight: 80
+        - pause: {duration: 30s}
+      
+      analysis:
+        templates:
+          - templateName: success-rate
+        startingStep: 2
+        args:
+          - name: service-name
+            value: {{ .Values.userService.name }}
+{{- end }}
+{{- end }}

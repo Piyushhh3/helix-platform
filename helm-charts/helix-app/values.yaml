@@ -1,0 +1,286 @@
+# DEFAULT VALUES - PRODUCTION CONFIGURATION
+# ============================================================================
+
+global:
+  environment: production
+  region: us-east-1
+  clusterName: helix-dev-eks
+  
+  # ECR Configuration
+  imageRegistry: 725537514357.dkr.ecr.us-east-1.amazonaws.com
+  imagePullPolicy: Always
+  
+  # Common labels
+  labels:
+    app.kubernetes.io/managed-by: helm
+    app.kubernetes.io/part-of: helix-platform
+
+# ============================================================================
+# USER SERVICE
+# ============================================================================
+userService:
+  enabled: true
+  name: user-service
+  replicaCount: 2
+  
+  image:
+    repository: helix-user-service
+    tag: latest
+  
+  service:
+    type: ClusterIP
+    port: 8003
+    targetPort: 8003
+
+  rollout:
+    enabled: false
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  healthCheck:
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8003
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8003
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+  
+  env:
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: database-credentials
+          key: user-service-url
+    - name: JWT_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: app-secrets
+          key: jwt-secret
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: LOG_LEVEL
+      value: "INFO"
+
+# ============================================================================
+# PRODUCT SERVICE
+# ============================================================================
+productService:
+  enabled: true
+  name: product-service
+  replicaCount: 2
+
+  rollout:
+    enabled: false
+  
+  image:
+    repository: helix-product-service
+    tag: latest
+  
+  service:
+    type: ClusterIP
+    port: 8001
+    targetPort: 8001
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  healthCheck:
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8001
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8001
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+  
+  env:
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: database-credentials
+          key: product-service-url
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: LOG_LEVEL
+      value: "INFO"
+
+# ============================================================================
+# ORDER SERVICE
+# ============================================================================
+orderService:
+  enabled: true
+  name: order-service
+  replicaCount: 2
+
+  rollout:
+    enabled: false
+  
+  image:
+    repository: helix-order-service
+    tag: latest
+  
+  service:
+    type: ClusterIP
+    port: 8002
+    targetPort: 8002
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  healthCheck:
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8002
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8002
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+  
+  env:
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: database-credentials
+          key: order-service-url
+    - name: PRODUCT_SERVICE_URL
+      value: "http://product-service:8001"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: LOG_LEVEL
+      value: "INFO"
+
+# ============================================================================
+# INGRESS - AWS ALB
+# ============================================================================
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/success-codes: '200'
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60
+  
+  hosts:
+    - host: api.helix-platform.io
+      paths:
+        - path: /api/v1/users
+          pathType: Prefix
+          service: user-service
+          port: 8003
+        - path: /api/v1/products
+          pathType: Prefix
+          service: product-service
+          port: 8001
+        - path: /api/v1/orders
+          pathType: Prefix
+          service: order-service
+          port: 8002
+
+# ============================================================================
+# OBSERVABILITY
+# ============================================================================
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+
+# ============================================================================
+# SECURITY
+# ============================================================================
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+# ============================================================================
+# NETWORK POLICIES
+# ============================================================================
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+

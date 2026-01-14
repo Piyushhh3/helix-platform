@@ -1,0 +1,19 @@
+{{- if .Values.orderService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.orderService.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "helix-app.labels" . | nindent 4 }}
+    app: {{ .Values.orderService.name }}
+spec:
+  type: {{ .Values.orderService.service.type }}
+  ports:
+  - port: {{ .Values.orderService.service.port }}
+    targetPort: {{ .Values.orderService.service.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    app: {{ .Values.orderService.name }}
+{{- end }}

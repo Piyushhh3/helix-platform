@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: order-service
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/Piyushhh3/helix-platform.git
+    targetRevision: main
+    path: helm-charts/helix-app
+    helm:
+      releaseName: helix-platform
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+      parameters:
+        - name: userService.enabled
+          value: "false"
+        - name: productService.enabled
+          value: "false"
+        - name: orderService.enabled
+          value: "true"
+        - name: orderService.image.tag
+          value: "latest"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: helix-dev
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

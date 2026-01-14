@@ -1,0 +1,49 @@
+{{- if .Values.orderService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.orderService.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "helix-app.labels" . | nindent 4 }}
+    app: {{ .Values.orderService.name }}
+    service: {{ .Values.orderService.name }}
+spec:
+  {{- if not .Values.orderService.autoscaling.enabled }}
+  replicas: {{ .Values.orderService.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Values.orderService.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.orderService.name }}
+        service: {{ .Values.orderService.name }}
+        version: {{ .Values.orderService.image.tag | quote }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8002"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Values.orderService.name }}
+        image: {{ if .Values.global.imageRegistry }}{{ .Values.global.imageRegistry }}/{{ end }}{{ .Values.orderService.image.repository }}:{{ .Values.orderService.image.tag }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.orderService.service.targetPort }}
+          protocol: TCP
+        env:
+        {{- toYaml .Values.orderService.env | nindent 8 }}
+        livenessProbe:
+          {{- toYaml .Values.orderService.healthCheck.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.orderService.healthCheck.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.orderService.resources | nindent 10 }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+{{- end }}
