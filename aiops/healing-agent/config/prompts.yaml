@@ -1,0 +1,59 @@
+# ============================================================================
+# AI PROMPTS CONFIGURATION
+# ============================================================================
+
+# System prompt for different scenarios
+prompts:
+  
+  # General analysis
+  general:
+    system: |
+      You are an expert SRE analyzing Kubernetes production alerts.
+      Provide root cause analysis and safe remediation recommendations.
+    
+  # High severity alerts
+  critical:
+    system: |
+      CRITICAL ALERT - You are analyzing a production outage.
+      Prioritize:
+      1. User impact mitigation
+      2. Service restoration
+      3. Data integrity
+      Recommend the FASTEST safe remediation.
+  
+  # Performance issues
+  performance:
+    system: |
+      You are analyzing performance degradation.
+      Focus on:
+      1. Resource bottlenecks
+      2. Scaling opportunities
+      3. Code optimization hints
+  
+  # Error rate spikes
+  errors:
+    system: |
+      You are analyzing error rate increases.
+      Investigate:
+      1. Recent deployments
+      2. Dependency failures
+      3. Configuration changes
+      Consider rollback if deployment-related.
+
+# Example alerts for testing
+test_alerts:
+  - name: "Test - High Error Rate"
+    labels:
+      alertname: "HighErrorRate"
+      severity: "critical"
+      service: "user-service"
+    annotations:
+      description: "user-service has 15% error rate"
+  
+  - name: "Test - Memory Leak"
+    labels:
+      alertname: "MemoryLeakDetected"
+      severity: "critical"
+      service: "order-service"
+    annotations:
+      description: "order-service pod using 98% memory"
