@@ -10,6 +10,11 @@ global:
   imageRegistry: 725537514357.dkr.ecr.us-east-1.amazonaws.com
   imagePullPolicy: Always
   
+  # OpenTelemetry configuration
+  otel:
+    enabled: true
+    endpoint: "http://otel-collector.helix-dev:4317"
+    serviceName: "helix-platform"
   # Common labels
   labels:
     app.kubernetes.io/managed-by: helm
@@ -84,6 +89,14 @@ userService:
     - name: LOG_LEVEL
       value: "INFO"
 
+     # OpenTelemetry
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "{{ .Values.global.otel.endpoint }}"
+    - name: OTEL_SERVICE_NAME
+      value: "user-service"
+    - name: OTEL_RESOURCE_ATTRIBUTES
+      value: "deployment.environment=dev,service.namespace=helix-dev"
+
 # ============================================================================
 # PRODUCT SERVICE
 # ============================================================================
@@ -147,6 +160,14 @@ productService:
       value: "1"
     - name: LOG_LEVEL
       value: "INFO"
+
+     # OpenTelemetry
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "{{ .Values.global.otel.endpoint }}"
+    - name: OTEL_SERVICE_NAME
+      value: "product-service"
+    - name: OTEL_RESOURCE_ATTRIBUTES
+      value: "deployment.environment=dev,service.namespace=helix-dev"
 
 # ============================================================================
 # ORDER SERVICE
@@ -213,6 +234,13 @@ orderService:
       value: "1"
     - name: LOG_LEVEL
       value: "INFO"
+     # OpenTelemetry
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "{{ .Values.global.otel.endpoint }}"
+    - name: OTEL_SERVICE_NAME
+      value: "order-service"
+    - name: OTEL_RESOURCE_ATTRIBUTES
+      value: "deployment.environment=dev,service.namespace=helix-dev"
 
 # ============================================================================
 # INGRESS - AWS ALB

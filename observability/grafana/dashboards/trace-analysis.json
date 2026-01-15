@@ -1,0 +1,120 @@
+{
+  "dashboard": {
+    "title": "Helix Platform - Trace Analysis",
+    "tags": ["helix", "traces", "distributed-tracing"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "30s",
+    
+    "panels": [
+      {
+        "id": 1,
+        "title": "🔍 Recent Traces",
+        "type": "traces",
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "datasource": "Tempo",
+            "queryType": "traceql",
+            "query": "{service.name=\"user-service\" || service.name=\"product-service\" || service.name=\"order-service\"}"
+          }
+        ]
+      },
+      
+      {
+        "id": 2,
+        "title": "⚠️ Error Traces",
+        "type": "traces",
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 12},
+        "targets": [
+          {
+            "datasource": "Tempo",
+            "queryType": "traceql",
+            "query": "{status=error}"
+          }
+        ]
+      },
+      
+      {
+        "id": 3,
+        "title": "🐌 Slow Traces (>1s)",
+        "type": "traces",
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 24},
+        "targets": [
+          {
+            "datasource": "Tempo",
+            "queryType": "traceql",
+            "query": "{duration>1s}"
+          }
+        ]
+      },
+      
+      {
+        "id": 4,
+        "title": "📊 Trace Rate by Service",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
+        "targets": [
+          {
+            "datasource": "Prometheus",
+            "expr": "sum(rate(traces_spanmetrics_calls_total[5m])) by (service_name)",
+            "legendFormat": "{{service_name}}"
+          }
+        ]
+      },
+      
+      {
+        "id": 5,
+        "title": "⏱️ P95 Span Duration",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 36},
+        "targets": [
+          {
+            "datasource": "Prometheus",
+            "expr": "histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket[5m])) by (le, service_name))",
+            "legendFormat": "{{service_name}} p95"
+          }
+        ]
+      }
+    ],
+    
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}
+```
+
+---
+
+## 🔗 HOW IT ALL CONNECTS
+```
+Your FastAPI App (user-service)
+    ↓ (OTLP traces)
+OpenTelemetry Collector
+    ↓ (process & batch)
+Grafana Tempo (storage)
+    ↓ (query)
+Grafana UI (visualization)
+```
+
+---
+
+## 📊 EXAMPLE TRACES YOU'LL SEE
+
+**Create Order Flow:**
+```
+Trace ID: abc123xyz
+Duration: 250ms
+
+→ user-service: POST /api/v1/orders [50ms]
+  ↓
+  → order-service: create_order() [180ms]
+    ↓
+    → product-service: GET /api/v1/products/123 [30ms]
+      ↓
+      → PostgreSQL: SELECT * FROM products [20ms]
+    ↓
+    → PostgreSQL: INSERT INTO orders [120ms] ← SLOW!

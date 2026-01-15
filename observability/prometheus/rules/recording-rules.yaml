@@ -1,0 +1,78 @@
+# ============================================================================
+# RECORDING RULES - Pre-compute expensive queries
+# ============================================================================
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: helix-recording-rules
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: recording-rules
+spec:
+  groups:
+    - name: helix-aggregation
+      interval: 30s
+      rules:
+        # Request rate per service
+        - record: helix:http_requests:rate5m
+          expr: |
+            sum(rate(http_requests_total{namespace="helix-dev"}[5m])) by (service)
+        
+        # Error rate per service
+        - record: helix:http_errors:rate5m
+          expr: |
+            sum(rate(http_requests_total{namespace="helix-dev",status=~"5.."}[5m])) by (service)
+        
+        # Error ratio (0-1)
+        - record: helix:http_error_ratio:rate5m
+          expr: |
+            helix:http_errors:rate5m / helix:http_requests:rate5m
+        
+        # P95 latency per service
+        - record: helix:http_request_duration:p95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{namespace="helix-dev"}[5m])) by (service, le)
+            )
+        
+        # P99 latency per service
+        - record: helix:http_request_duration:p99
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket{namespace="helix-dev"}[5m])) by (service, le)
+            )
+        
+        # CPU usage per pod
+        - record: helix:pod_cpu:usage
+          expr: |
+            sum(rate(container_cpu_usage_seconds_total{namespace="helix-dev",container!=""}[5m])) by (pod)
+        
+        # Memory usage per pod (bytes)
+        - record: helix:pod_memory:usage_bytes
+          expr: |
+            sum(container_memory_working_set_bytes{namespace="helix-dev",container!=""}) by (pod)
+        
+        # Memory usage per pod (percentage)
+        - record: helix:pod_memory:usage_percent
+          expr: |
+            (
+              helix:pod_memory:usage_bytes
+              /
+              sum(container_spec_memory_limit_bytes{namespace="helix-dev",container!=""}) by (pod)
+            ) * 100
+        
+        # Business metrics - orders per minute
+        - record: helix:orders:rate1m
+          expr: |
+            sum(rate(orders_created_total{namespace="helix-dev"}[1m])) * 60
+        
+        # Business metrics - order success rate
+        - record: helix:orders:success_rate
+          expr: |
+            (
+              sum(rate(orders_successful_total{namespace="helix-dev"}[5m]))
+              /
+              sum(rate(orders_created_total{namespace="helix-dev"}[5m]))
+            ) * 100

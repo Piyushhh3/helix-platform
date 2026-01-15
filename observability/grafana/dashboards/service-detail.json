@@ -1,0 +1,131 @@
+{
+  "dashboard": {
+    "title": "Service Deep Dive - $service",
+    "tags": ["helix", "service-detail"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "30s",
+    
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate by Endpoint",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{service=\"$service\",namespace=\"helix-dev\"}[5m])) by (endpoint)",
+            "legendFormat": "{{endpoint}}"
+          }
+        ]
+      },
+      
+      {
+        "id": 2,
+        "title": "Error Rate by Endpoint",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{service=\"$service\",namespace=\"helix-dev\",status=~\"5..\"}[5m])) by (endpoint) / sum(rate(http_requests_total{service=\"$service\",namespace=\"helix-dev\"}[5m])) by (endpoint) * 100",
+            "legendFormat": "{{endpoint}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent"},
+          {"format": "short"}
+        ]
+      },
+      
+      {
+        "id": 3,
+        "title": "Response Time Distribution",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_request_duration_seconds_bucket{service=\"$service\",namespace=\"helix-dev\"}[5m])) by (le)",
+            "format": "heatmap",
+            "legendFormat": "{{le}}"
+          }
+        ]
+      },
+      
+      {
+        "id": 4,
+        "title": "Database Query Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(database_query_duration_seconds_bucket{service=\"$service\"}[5m])) by (le, query_type))",
+            "legendFormat": "{{query_type}} p95"
+          }
+        ]
+      },
+      
+      {
+        "id": 5,
+        "title": "Active Database Connections",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "database_connections_active{service=\"$service\"}",
+            "legendFormat": "Active"
+          },
+          {
+            "expr": "database_connections_idle{service=\"$service\"}",
+            "legendFormat": "Idle"
+          }
+        ]
+      },
+      
+      {
+        "id": 6,
+        "title": "Pod Restarts (Last 24h)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"helix-dev\",pod=~\"$service.*\"}[24h]))",
+            "legendFormat": "Restarts"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 5, "color": "red"}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    
+    "templating": {
+      "list": [
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(up{namespace=\"helix-dev\"}, job)",
+          "refresh": 1,
+          "includeAll": false,
+          "current": {
+            "selected": false,
+            "text": "user-service",
+            "value": "user-service"
+          }
+        }
+      ]
+    }
+  }
+}

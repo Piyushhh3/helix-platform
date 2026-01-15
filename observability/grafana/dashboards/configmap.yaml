@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: helix-custom-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  helix-overview.json: |
+    # Paste the entire helix-overview.json content here (formatted)
+  
+  business-metrics.json: |
+    # Paste the entire business-metrics.json content here
+  
+  service-detail.json: |
+    # Paste the entire service-detail.json content here

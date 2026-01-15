@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: helix-dev
+data:
+  otel-collector-config.yaml: |
+    # ========================================================================
+    # OPENTELEMETRY COLLECTOR CONFIGURATION
+    # ========================================================================
+    
+    receivers:
+      # Receive traces from applications via OTLP
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      
+      # Jaeger receiver (alternative format)
+      jaeger:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:14250
+          thrift_http:
+            endpoint: 0.0.0.0:14268
+    
+    processors:
+      # Batch traces for efficiency
+      batch:
+        timeout: 10s
+        send_batch_size: 1024
+      
+      # Add resource attributes
+      resource:
+        attributes:
+          - key: cluster.name
+            value: helix-dev-eks
+            action: upsert
+          - key: deployment.environment
+            value: dev
+            action: upsert
+      
+      # Memory limiter to prevent OOM
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+        spike_limit_mib: 128
+    
+    exporters:
+      # Export to Grafana Tempo
+      otlp:
+        endpoint: tempo.monitoring:4317
+        tls:
+          insecure: true
+      
+      # Debug exporter (optional - for troubleshooting)
+      logging:
+        loglevel: info
+        sampling_initial: 5
+        sampling_thereafter: 200
+    
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp, jaeger]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp, logging]
+      
+      telemetry:
+        logs:
+          level: info
+        metrics:
+          address: 0.0.0.0:8888
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: helix-dev
+  labels:
+    app: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.91.0
+        args:
+          - --config=/conf/otel-collector-config.yaml
+        ports:
+          - containerPort: 4317  # OTLP gRPC
+            name: otlp-grpc
+          - containerPort: 4318  # OTLP HTTP
+            name: otlp-http
+          - containerPort: 14250 # Jaeger gRPC
+            name: jaeger-grpc
+          - containerPort: 14268 # Jaeger HTTP
+            name: jaeger-http
+          - containerPort: 8888  # Metrics
+            name: metrics
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+          - name: config
+            mountPath: /conf
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: helix-dev
+  labels:
+    app: otel-collector
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4317
+      targetPort: 4317
+      protocol: TCP
+      name: otlp-grpc
+    - port: 4318
+      targetPort: 4318
+      protocol: TCP
+      name: otlp-http
+    - port: 14250
+      targetPort: 14250
+      protocol: TCP
+      name: jaeger-grpc
+    - port: 14268
+      targetPort: 14268
+      protocol: TCP
+      name: jaeger-http
+  selector:
+    app: otel-collector

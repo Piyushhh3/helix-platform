@@ -1,0 +1,209 @@
+{
+  "dashboard": {
+    "title": "Helix Platform - Business Metrics",
+    "tags": ["helix", "business", "kpi"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "1m",
+    
+    "panels": [
+      {
+        "id": 1,
+        "title": "📦 Orders Created (Total)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(orders_created_total{namespace=\"helix-dev\"})",
+            "legendFormat": "Total Orders"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 0
+          }
+        }
+      },
+      
+      {
+        "id": 2,
+        "title": "📈 Orders per Minute",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+        "targets": [
+          {
+            "expr": "rate(orders_created_total{namespace=\"helix-dev\"}[1m]) * 60",
+            "legendFormat": "Orders/min"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Orders/min"},
+          {"format": "short"}
+        ]
+      },
+      
+      {
+        "id": 3,
+        "title": "👥 Active Users",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "count(count by (user_id) (rate(http_requests_total{service=\"user-service\"}[5m]) > 0))",
+            "legendFormat": "Active Users"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      
+      {
+        "id": 4,
+        "title": "💰 Revenue (Mock Data)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(order_value_total{namespace=\"helix-dev\"}[5m])) * 300",
+            "legendFormat": "Revenue Rate ($/sec)"
+          }
+        ],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "Revenue"},
+          {"format": "short"}
+        ]
+      },
+      
+      {
+        "id": 5,
+        "title": "📊 Order Success Rate",
+        "type": "gauge",
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(orders_successful_total{namespace=\"helix-dev\"}[5m])) / sum(rate(orders_created_total{namespace=\"helix-dev\"}[5m])) * 100",
+            "legendFormat": "Success %"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 90, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      
+      {
+        "id": 6,
+        "title": "🔝 Top Products (by orders)",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (product_id) (rate(orders_created_total{namespace=\"helix-dev\"}[1h])))",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "indexByName": {},
+              "renameByName": {
+                "product_id": "Product ID",
+                "Value": "Orders/hour"
+              }
+            }
+          }
+        ]
+      },
+      
+      {
+        "id": 7,
+        "title": "⏰ Peak Hours Heatmap",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"helix-dev\"}[1m])) by (hour)",
+            "legendFormat": "{{hour}}"
+          }
+        ],
+        "dataFormat": "timeseries",
+        "heatmap": {},
+        "cards": {
+          "cardPadding": 2,
+          "cardRound": 2
+        },
+        "color": {
+          "mode": "spectrum",
+          "cardColor": "#b4ff00",
+          "colorScale": "sqrt",
+          "exponent": 0.5,
+          "colorScheme": "interpolateOranges"
+        }
+      },
+      
+      {
+        "id": 8,
+        "title": "🎯 SLA Compliance (99.9% uptime)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "(1 - (sum(rate(http_requests_total{namespace=\"helix-dev\",status=~\"5..\"}[30d])) / sum(rate(http_requests_total{namespace=\"helix-dev\"}[30d])))) * 100",
+            "legendFormat": "Uptime %"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "textMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 3,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 99.5, "color": "yellow"},
+                {"value": 99.9, "color": "green"}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    }
+  }
+}

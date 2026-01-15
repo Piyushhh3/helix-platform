@@ -1,0 +1,325 @@
+# ============================================================================
+# HELIX PLATFORM - ALERT RULES
+# These alerts trigger the AI healing agent
+# ============================================================================
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: helix-platform-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # ========================================================================
+    # SERVICE HEALTH ALERTS
+    # ========================================================================
+    - name: service-health
+      interval: 30s
+      rules:
+        # High error rate - CRITICAL
+        - alert: HighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{namespace="helix-dev",status=~"5.."}[5m])) by (service)
+              /
+              sum(rate(http_requests_total{namespace="helix-dev"}[5m])) by (service)
+            ) * 100 > 5
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+            healing_action: rollback
+          annotations:
+            summary: "High error rate on {{ $labels.service }}"
+            description: "{{ $labels.service }} has {{ $value | humanizePercentage }} error rate (threshold: 5%)"
+            remediation: "Consider rolling back to previous version"
+            runbook: "https://github.com/Piyushhh3/helix-platform/wiki/HighErrorRate"
+        
+        # Service down - CRITICAL
+        - alert: ServiceDown
+          expr: up{job=~".*-service",namespace="helix-dev"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: platform
+            healing_action: restart
+          annotations:
+            summary: "Service {{ $labels.job }} is down"
+            description: "{{ $labels.job }} has been down for more than 1 minute"
+            remediation: "Restart the service pods"
+            impact: "Users cannot access {{ $labels.job }}"
+        
+        # High latency - WARNING
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{namespace="helix-dev"}[5m])) by (service, le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            healing_action: scale
+          annotations:
+            summary: "High latency on {{ $labels.service }}"
+            description: "{{ $labels.service }} p95 latency is {{ $value }}s (threshold: 0.5s)"
+            remediation: "Consider scaling up replicas or investigating slow queries"
+    
+    # ========================================================================
+    # RESOURCE SATURATION ALERTS
+    # ========================================================================
+    - name: resource-saturation
+      interval: 30s
+      rules:
+        # High memory usage - WARNING
+        - alert: HighMemoryUsage
+          expr: |
+            (
+              sum(container_memory_working_set_bytes{namespace="helix-dev",container!=""}) by (pod)
+              /
+              sum(container_spec_memory_limit_bytes{namespace="helix-dev",container!=""}) by (pod)
+            ) * 100 > 85
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            healing_action: restart
+          annotations:
+            summary: "High memory usage on {{ $labels.pod }}"
+            description: "{{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory limit"
+            remediation: "Check for memory leaks or increase memory limits"
+        
+        # Memory leak detected - CRITICAL
+        - alert: MemoryLeakDetected
+          expr: |
+            (
+              sum(container_memory_working_set_bytes{namespace="helix-dev",container!=""}) by (pod)
+              /
+              sum(container_spec_memory_limit_bytes{namespace="helix-dev",container!=""}) by (pod)
+            ) * 100 > 95
+          for: 10m
+          labels:
+            severity: critical
+            team: platform
+            healing_action: restart
+          annotations:
+            summary: "Memory leak detected on {{ $labels.pod }}"
+            description: "{{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory (sustained)"
+            remediation: "Restart pod to free memory"
+        
+        # High CPU usage - WARNING
+        - alert: HighCPUUsage
+          expr: |
+            sum(rate(container_cpu_usage_seconds_total{namespace="helix-dev",container!=""}[5m])) by (pod)
+            /
+            sum(container_spec_cpu_quota{namespace="helix-dev",container!=""}/container_spec_cpu_period{namespace="helix-dev",container!=""}) by (pod)
+            * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            healing_action: scale
+          annotations:
+            summary: "High CPU usage on {{ $labels.pod }}"
+            description: "{{ $labels.pod }} is using {{ $value | humanizePercentage }} CPU"
+            remediation: "Consider scaling horizontally"
+        
+        # CPU throttling - WARNING
+        - alert: CPUThrottling
+          expr: |
+            rate(container_cpu_cfs_throttled_seconds_total{namespace="helix-dev",container!=""}[5m])
+            / 
+            rate(container_cpu_cfs_periods_total{namespace="helix-dev",container!=""}[5m])
+            * 100 > 25
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "CPU throttling on {{ $labels.pod }}"
+            description: "{{ $labels.pod }} is being throttled {{ $value | humanizePercentage }}"
+            remediation: "Increase CPU limits or optimize application"
+    
+    # ========================================================================
+    # POD HEALTH ALERTS
+    # ========================================================================
+    - name: pod-health
+      interval: 30s
+      rules:
+        # Pod crash looping - CRITICAL
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total{namespace="helix-dev"}[15m]) * 60 * 5 > 0
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+            healing_action: investigate
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash looping"
+            description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 5 minutes"
+            remediation: "Check pod logs: kubectl logs -n helix-dev {{ $labels.pod }} --previous"
+        
+        # Pod not ready - WARNING
+        - alert: PodNotReady
+          expr: |
+            sum by (namespace, pod) (
+              kube_pod_status_phase{namespace="helix-dev", phase=~"Pending|Unknown|Failed"}
+            ) > 0
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Pod {{ $labels.pod }} not ready"
+            description: "Pod {{ $labels.pod }} has been in {{ $labels.phase }} state for 5+ minutes"
+        
+        # Too few replicas - WARNING
+        - alert: TooFewReplicas
+          expr: |
+            kube_deployment_status_replicas_available{namespace="helix-dev"}
+            
+            kube_deployment_spec_replicas{namespace="helix-dev"} * 0.5
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+            healing_action: scale
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} has too few replicas"
+            description: "Only {{ $value }} replicas available (expected {{ $labels.spec_replicas }})"
+            remediation: "Check pod status and scale if needed"
+    
+    # ========================================================================
+    # BUSINESS METRIC ALERTS
+    # ========================================================================
+    - name: business-metrics
+      interval: 1m
+      rules:
+        # Order failure rate high - CRITICAL
+        - alert: HighOrderFailureRate
+          expr: |
+            (
+              sum(rate(orders_failed_total{namespace="helix-dev"}[5m]))
+              /
+              sum(rate(orders_created_total{namespace="helix-dev"}[5m]))
+            ) * 100 > 10
+          for: 3m
+          labels:
+            severity: critical
+            team: platform
+            healing_action: investigate
+          annotations:
+            summary: "High order failure rate"
+            description: "{{ $value | humanizePercentage }} of orders are failing (threshold: 10%)"
+            impact: "Revenue impact - customers cannot place orders"
+            remediation: "Check order-service logs and database connectivity"
+        
+        # No orders being created - CRITICAL
+        - alert: NoOrdersCreated
+          expr: |
+            sum(rate(orders_created_total{namespace="helix-dev"}[5m])) == 0
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "No orders are being created"
+            description: "Zero orders in the last 5 minutes - possible outage"
+            impact: "Complete revenue stoppage"
+        
+        # API request rate drop - WARNING
+        - alert: RequestRateDrop
+          expr: |
+            (
+              sum(rate(http_requests_total{namespace="helix-dev"}[5m]))
+              /
+              sum(rate(http_requests_total{namespace="helix-dev"}[5m] offset 1h))
+            ) < 0.5
+          for: 10m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Request rate dropped by 50%"
+            description: "Current request rate is {{ $value | humanizePercentage }} of 1 hour ago"
+            remediation: "Check for upstream issues or marketing campaigns"
+    
+    # ========================================================================
+    # DATABASE ALERTS
+    # ========================================================================
+    - name: database-health
+      interval: 30s
+      rules:
+        # High database connection usage - WARNING
+        - alert: HighDatabaseConnections
+          expr: |
+            (
+              database_connections_active{namespace="helix-dev"}
+              /
+              database_connections_max{namespace="helix-dev"}
+            ) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "High database connection usage on {{ $labels.service }}"
+            description: "{{ $labels.service }} using {{ $value | humanizePercentage }} of max connections"
+            remediation: "Check for connection leaks or increase pool size"
+        
+        # Slow database queries - WARNING
+        - alert: SlowDatabaseQueries
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(database_query_duration_seconds_bucket{namespace="helix-dev"}[5m])) by (service, le)
+            ) > 1
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Slow database queries on {{ $labels.service }}"
+            description: "{{ $labels.service }} p95 query time is {{ $value }}s"
+            remediation: "Review slow query logs and add indexes"
+    
+    # ========================================================================
+    # KUBERNETES CLUSTER ALERTS
+    # ========================================================================
+    - name: cluster-health
+      interval: 30s
+      rules:
+        # Node not ready - CRITICAL
+        - alert: NodeNotReady
+          expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            team: infrastructure
+          annotations:
+            summary: "Node {{ $labels.node }} is not ready"
+            description: "Kubernetes node {{ $labels.node }} has been unready for 5+ minutes"
+        
+        # Node memory pressure - WARNING
+        - alert: NodeMemoryPressure
+          expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+          for: 5m
+          labels:
+            severity: warning
+            team: infrastructure
+          annotations:
+            summary: "Node {{ $labels.node }} under memory pressure"
+            description: "Node may start evicting pods"
+        
+        # Node disk pressure - WARNING
+        - alert: NodeDiskPressure
+          expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+          for: 5m
+          labels:
+            severity: warning
+            team: infrastructure
+          annotations:
+            summary: "Node {{ $labels.node }} under disk pressure"
+            description: "Node disk usage is high"

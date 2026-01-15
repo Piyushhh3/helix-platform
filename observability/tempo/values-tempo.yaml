@@ -1,0 +1,85 @@
+# ============================================================================
+# GRAFANA TEMPO - DISTRIBUTED TRACING
+# ============================================================================
+
+tempo:
+  replicas: 1
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Retention
+  retention: 720h  # 30 days
+  
+  # Storage backend (in-memory for demo, use S3 in production)
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      
+  # Ingester configuration
+  ingester:
+    trace_idle_period: 10s
+    max_block_bytes: 1048576
+    max_block_duration: 5m
+  
+  # Server configuration
+  server:
+    http_listen_port: 3100
+    grpc_listen_port: 9095
+
+# ============================================================================
+# TEMPO DISTRIBUTOR
+# ============================================================================
+tempoDistributor:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# ============================================================================
+# TEMPO QUERY (for Grafana integration)
+# ============================================================================
+tempoQuery:
+  enabled: true
+  replicas: 1
+
+# ============================================================================
+# PERSISTENCE
+# ============================================================================
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClassName: gp2
+
+# ============================================================================
+# SERVICE
+# ============================================================================
+service:
+  type: ClusterIP
+  port: 3100
+
+# ============================================================================
+# JAEGER RECEIVER (for OTEL compatibility)
+# ============================================================================
+traces:
+  jaeger:
+    grpc:
+      enabled: true
+    thriftHttp:
+      enabled: true
+  otlp:
+    grpc:
+      enabled: true
+    http:
+      enabled: true
