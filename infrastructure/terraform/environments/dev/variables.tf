@@ -29,7 +29,7 @@ variable "vpc_cidr" {
 variable "cluster_version" {
   description = "Kubernetes version"
   type        = string
-  default     = "1.29"
+  default     = "1.33"
 }
 
 variable "node_group_desired_size" {
