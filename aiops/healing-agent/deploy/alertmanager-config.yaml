@@ -1,0 +1,19 @@
+# ============================================================================
+# ALERTMANAGER CONFIGURATION
+# Add this to your existing AlertManager config
+# ============================================================================
+
+route:
+  receiver: 'healing-agent'
+  routes:
+    # Send all helix-dev alerts to healing agent
+    - match:
+        namespace: helix-dev
+      receiver: 'healing-agent'
+      continue: true  # Also send to other receivers (Slack, etc.)
+
+receivers:
+  - name: 'healing-agent'
+    webhook_configs:
+      - url: 'http://healing-agent.helix-aiops:5000/webhook'
+        send_resolved: true

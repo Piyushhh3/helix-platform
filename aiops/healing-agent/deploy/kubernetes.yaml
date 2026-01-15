@@ -1,0 +1,185 @@
+# ============================================================================
+# HEALING AGENT - KUBERNETES DEPLOYMENT
+# ============================================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: helix-aiops
+
+---
+# ServiceAccount with RBAC permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: healing-agent
+  namespace: helix-aiops
+
+---
+# ClusterRole - permissions for the agent
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: healing-agent-role
+rules:
+  # Read pods, deployments, events
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch"]
+  
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  
+  # Delete pods (for restart)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
+  
+  # Read secrets (for database connection strings)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+
+---
+# Bind ClusterRole to ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: healing-agent-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: healing-agent-role
+subjects:
+  - kind: ServiceAccount
+    name: healing-agent
+    namespace: helix-aiops
+
+---
+# ConfigMap for configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: healing-agent-config
+  namespace: helix-aiops
+data:
+  K8S_NAMESPACE: "helix-dev"
+  PROMETHEUS_URL: "http://prometheus-kube-prometheus-prometheus.monitoring:9090"
+  DRY_RUN: "false"
+  LOG_LEVEL: "INFO"
+
+---
+# Secret for API keys (create this manually or with sealed-secrets)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: healing-agent-secrets
+  namespace: helix-aiops
+type: Opaque
+stringData:
+  GROQ_API_KEY: "your-groq-api-key-here"  # Replace with actual key
+  SLACK_WEBHOOK_URL: "your-slack-webhook-url-here"  # Replace with actual webhook
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: healing-agent
+  namespace: helix-aiops
+  labels:
+    app: healing-agent
+spec:
+  replicas: 1  # Single instance is enough
+  selector:
+    matchLabels:
+      app: healing-agent
+  template:
+    metadata:
+      labels:
+        app: healing-agent
+    spec:
+      serviceAccountName: healing-agent
+      
+      containers:
+      - name: healing-agent
+        image: 725537514357.dkr.ecr.us-east-1.amazonaws.com/helix-healing-agent:latest
+        imagePullPolicy: Always
+        
+        ports:
+        - containerPort: 5000
+          name: http
+        
+        env:
+        - name: K8S_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              name: healing-agent-config
+              key: K8S_NAMESPACE
+        
+        - name: PROMETHEUS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: healing-agent-config
+              key: PROMETHEUS_URL
+        
+        - name: DRY_RUN
+          valueFrom:
+            configMapKeyRef:
+              name: healing-agent-config
+              key: DRY_RUN
+        
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: healing-agent-secrets
+              key: GROQ_API_KEY
+        
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: healing-agent-secrets
+              key: SLACK_WEBHOOK_URL
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: healing-agent
+  namespace: helix-aiops
+  labels:
+    app: healing-agent
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  selector:
+    app: healing-agent
