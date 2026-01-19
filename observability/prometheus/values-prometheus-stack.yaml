@@ -30,6 +30,7 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
+          storageClassName: gp2
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
@@ -110,6 +111,7 @@ grafana:
   persistence:
     enabled: true
     size: 5Gi
+    storageClassName: gp2
   
   # Datasources
   datasources:
@@ -130,6 +132,7 @@ grafana:
           type: tempo
           url: http://tempo:3100
           access: proxy
+          isDefault: false
           jsonData:
             tracesToLogs:
               datasourceUid: Loki
@@ -196,6 +199,7 @@ alertmanager:
     storage:
       volumeClaimTemplate:
         spec:
+          storageClassName: gp2
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
