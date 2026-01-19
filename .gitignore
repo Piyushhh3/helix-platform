@@ -70,3 +70,6 @@ infrastructure/kubernetes/secrets/templates/*.yaml
 # Temporary files
 *.tmp
 *.temp
+
+
+*-secrets.yaml
