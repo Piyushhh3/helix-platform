@@ -31,7 +31,7 @@ tempo:
   
   # Server configuration
   server:
-    http_listen_port: 3100
+    http_listen_port: 3200
     grpc_listen_port: 9095
 
 # ============================================================================
@@ -67,7 +67,7 @@ persistence:
 # ============================================================================
 service:
   type: ClusterIP
-  port: 3100
+  port: 3200
 
 # ============================================================================
 # JAEGER RECEIVER (for OTEL compatibility)
