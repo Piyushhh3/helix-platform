@@ -312,3 +312,26 @@ networkPolicy:
     - Ingress
     - Egress
 
+
+# ============================================================================
+# POSTGRES CONFIGURATION
+# ============================================================================
+postgres:
+  enabled: true                # Set true in production to deploy Postgres
+  image:
+    repository: postgres
+    tag: "15-alpine"
+  service:
+    type: ClusterIP
+    port: 5432
+  persistence:
+    enabled: true              # Persist data in production
+    storageClass: "gp2"        # or your EBS storage class
+    size: 10Gi
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"

@@ -1,4 +1,4 @@
- DEVELOPMENT ENVIRONMENT OVERRIDES
+# DEVELOPMENT ENVIRONMENT OVERRIDES
 # ============================================================================
 
 global:
@@ -43,3 +43,6 @@ orderService:
 ingress:
   annotations:
     alb.ingress.kubernetes.io/scheme: internal
+
+postgres:
+  enabled: false 
