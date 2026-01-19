@@ -18,22 +18,23 @@ spec:
         app: postgres
     spec:
       containers:
-      - name: postgres
-        image: {{ .Values.postgres.image }}
-        ports:
-        - containerPort: 5432
-        env:
-        {{- toYaml .Values.postgres.env | nindent 8 }}
-        volumeMounts:
-        - name: postgres-data
-          mountPath: /var/lib/postgresql/data
-        - name: init-script
-          mountPath: /docker-entrypoint-initdb.d
-      volumes:
-      - name: postgres-data
-        emptyDir: {}
-      - name: init-script
-        configMap:
-          name: postgres-init
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - containerPort: 5432
+{{- if .Values.postgres.env }}
+          env:
+{{- toYaml .Values.postgres.env | nindent 12 }}
 {{- end }}
-
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: postgres-data
+          emptyDir: {}
+        - name: init-script
+          configMap:
+            name: postgres-init
+{{- end }}
