@@ -15,9 +15,6 @@ userService:
     limits:
       memory: "256Mi"
       cpu: "250m"
-  env:
-    - name: DATABASE_URL
-      value: "postgresql://helix:admin123@postgres:5432/helix"
 
 productService:
   replicaCount: 1
@@ -30,9 +27,6 @@ productService:
     limits:
       memory: "256Mi"
       cpu: "250m"
-  env:
-    - name: DATABASE_URL
-      value: "postgresql://helix:admin123@postgres:5432/helix"
 
 orderService:
   replicaCount: 1
@@ -45,26 +39,14 @@ orderService:
     limits:
       memory: "256Mi"
       cpu: "250m"
-  env:
-    - name: DATABASE_URL
-      value: "postgresql://helix:admin123@postgres:5432/helix"
 
 ingress:
   annotations:
     alb.ingress.kubernetes.io/scheme: internal
+
 
 postgres:
   enabled: true
   image:
     repository: postgres
     tag: 15-alpine
-  env:
-    - name: POSTGRES_USER
-      value: helix
-    - name: POSTGRES_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: postgres-credentials
-          key: password
-    - name: POSTGRES_DB
-      value: helix
