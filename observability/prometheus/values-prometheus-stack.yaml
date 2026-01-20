@@ -124,6 +124,7 @@ grafana:
           url: http://prometheus-kube-prometheus-prometheus:9090
           access: proxy
           isDefault: true
+          uid: prometheus
           jsonData:
             timeInterval: 30s
         
@@ -133,6 +134,7 @@ grafana:
           url: http://tempo:3100
           access: proxy
           isDefault: false
+          uid: tempo
           jsonData:
             tracesToLogs:
               datasourceUid: Loki
@@ -167,19 +169,19 @@ grafana:
       kubernetes-cluster:
         gnetId: 7249
         revision: 1
-        datasource: Prometheus
+        datasource: prometheus
       
       # Node exporter
       node-exporter:
         gnetId: 1860
         revision: 27
-        datasource: Prometheus
+        datasource: prometheus
       
       # Kubernetes pods
       kubernetes-pods:
         gnetId: 6417
         revision: 1
-        datasource: Prometheus
+        datasource: prometheus
 
 # ============================================================================
 # ALERTMANAGER
